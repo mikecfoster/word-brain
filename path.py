@@ -1,7 +1,7 @@
 from collections import deque, namedtuple
-
+#
 # https://www.redblobgames.com/grids/line-drawing.html
-
+#
 class Grid:
     """ A 2D grid organised as a list of lists, a cell value of 0 
         is walkable. The grid is zero based; 0,0 is top left. """
