@@ -1,6 +1,7 @@
 from collections import deque, namedtuple
 import sqlite3
 import copy
+import dictionary
 
 # Search for words to help sove WordBrain puzzles
 
@@ -11,14 +12,13 @@ class Grid:
     def __init__(self, grid):
         self.grid = grid
 
-    def is_walkable(self, x, y, partial_word):
+    def is_walkable(self, x, y, partial_word, conn):
         if x >= 0 and x < len(self.grid[0]):
             if y >= 0 and y < len(self.grid):
                 if self.grid[y][x] == '':
                     return False
                 word = partial_word + self.grid[y][x]
-                #print('search for: {0}'.format(word))
-                if valid_word(word):
+                if validate_word(conn,word)[1]>0:
                     return True
         return False
     
@@ -28,34 +28,26 @@ class Grid:
                 return self.grid[y][x]
         return ''
     
-    def adjacent(self, x, y, partial_word):
+    def adjacent(self, x, y, partial_word, conn):
         """ return a list of adjcent cells as a list of tuples """
         cells = []
         point = namedtuple('point', ['x', 'y'])
-        if self.is_walkable(x+1, y, partial_word):
+        if self.is_walkable(x+1, y, partial_word, conn):
             cells.append(point(x+1, y))
-            #print('walkable x+1')
-        if self.is_walkable(x-1, y, partial_word):
+        if self.is_walkable(x-1, y, partial_word, conn):
             cells.append(point(x-1, y))
-            #print('walkable x-1')
-        if self.is_walkable(x, y+1, partial_word):
+        if self.is_walkable(x, y+1, partial_word, conn):
             cells.append(point(x, y+1))
-            #print('walkable y+1')
-        if self.is_walkable(x, y-1, partial_word):
+        if self.is_walkable(x, y-1, partial_word, conn):
             cells.append(point(x, y-1))
-            #print('walkable y-1')
-        if self.is_walkable(x-1, y-1, partial_word):
+        if self.is_walkable(x-1, y-1, partial_word, conn):
             cells.append(point(x-1, y-1))
-            #print('walkable x-1, y-1')
-        if self.is_walkable(x+1, y+1, partial_word):
+        if self.is_walkable(x+1, y+1, partial_word, conn):
             cells.append(point(x+1, y+1))
-            #print('walkable x+1, y+1')
-        if self.is_walkable(x+1, y-1, partial_word):
+        if self.is_walkable(x+1, y-1, partial_word, conn):
             cells.append(point(x+1, y-1))
-            #print('walkable x+1, y-1')
-        if self.is_walkable(x-1, y+1, partial_word):
+        if self.is_walkable(x-1, y+1, partial_word, conn):
             cells.append(point(x-1, y+1))
-            #print('walkable x-1, y+1')
         return cells
     
     def visualise(self,path=None):
@@ -82,6 +74,22 @@ class Cell:
     def __repr__(self):
         return "({0},{1},{2},{3},{4})".format(self.x, self.y, self.letter, self.parent, self.step)
     
+    def cell_as_token(self):
+        """ tokenise a cell x,y reference. 3,4 becomes 003004 """
+        return "{:0>2}{:0>2}".format(self.x, self.y)
+    
+    def token_from_path(self):
+        """ Create a tokenised string of the path to use as a unique 
+            identifier.
+        """
+        token = ""
+        cell:Cell = copy.copy(self)
+        token = cell.cell_as_token()
+        while (cell.parent != None):
+            cell = cell.parent
+            token = cell.cell_as_token() + token
+        return token
+    
 class PathList:
     """ a collection of Cells """
     def __init__(self):
@@ -107,53 +115,45 @@ class PathList:
         """ Concatenate letters from the path. The path is based on tracing
             backward through a node based on the 'parent' property.
         """
-        print("node: {0}".format(node))
         cell = copy.copy(node)
         word = cell.letter
         while (cell.parent != None):
             cell = cell.parent
             word = cell.letter + word
-        print("word-from: {0}".format(word))
         return word
 
 
-def dfs():
-    maze = [
-        ['s','e','l','l','b'],
-        ['p','r','e','c','i'],
-        ['s','u','c','t','e'],
-        ['p','t','a','n','t'],
-        ['o','l','p','y','u']
-    ]
+def dfs(conn, maze, start_x, start_y, target_length):
     grid = Grid(maze)
     frontier = PathList()
     explored = set()
     words = []
-    start_point = Cell(2,4,grid.letter(2,4))
-    max_length = 7
+    start_point = Cell(start_x,start_y,grid.letter(start_x,start_y))
     frontier.path.append(start_point)
-    explored.add(start_point)
 
     while frontier.path:
-        cell = frontier.path.pop() #current node
+        cell:Cell = frontier.path.pop() #current node
+        path_token = cell.token_from_path()
+        if path_token in explored:
+            continue
         possible_word = frontier.word_from_node(cell)
-        print('possible word: {0}'.format(possible_word))
-        if valid_word(possible_word) ==1:
+        (valid_word , word_count) = validate_word(conn, possible_word)
+        if word_count ==0:
+            continue
+        if  valid_word and len(possible_word) == target_length:
             words.append(possible_word)
-        if len(possible_word) < max_length:
-            adjacent = grid.adjacent(cell.x, cell.y, possible_word)
-            print("adjacent: {0}".format(adjacent))
+            explored.add(path_token)
+            print('possible word: {0} ({1}) {2}'.format(possible_word, word_count, valid_word))
+        if len(possible_word) < target_length:
+            adjacent = grid.adjacent(cell.x, cell.y, possible_word, conn)
             if adjacent:
-                explored.add(cell)
+                explored.add(path_token)
             for point in adjacent:
-                print("explored: {0}".format(explored))
-                #if explored.find(point.x, point.y):
-                #    continue
                 letter = grid.letter(point.x,point.y)
-                print("letter: {0}".format(letter))
                 next_cell = Cell(point.x, point.y, letter, cell, cell.step+1)
-                print("Next cell: {0}".format(next_cell))
-                frontier.path.append(next_cell)
+                path_token = next_cell.token_from_path()
+                if path_token not in explored:
+                    frontier.path.append(next_cell)
 
     print('Words: ')
     print(words)
@@ -161,26 +161,84 @@ def dfs():
 # defined as a global type
 Point = namedtuple('point', ['x', 'y'])
 
-def valid_word(word):
+def validate_word(conn, word):
     """ create a database connection to an SQLite database """
-    db = "dictionary.db"
-    conn = None
     rows = []
     try:
-        conn = sqlite3.connect(db)
         cursor = conn.cursor()
+        # check if a word is in the dictionary
+        search = word
+        sql = """ select * from words where word = (?) """
+        cursor.execute(sql, (search,))
+        rows = cursor.fetchone()
+        valid_word = True if rows and len(rows) == 1 else False
+        # check if there are words beginning with 
         search = word+'%'
         sql = """ select count(*) from words where word like (?) """
         cursor.execute(sql, (search,))
         rows = cursor.fetchone()
+        word_count = rows[0] if len(rows) == 1 else 0
     except sqlite3.Error as e:
         print(e)
-    finally:
-        if conn:
-            conn.close()
-    return len(rows)
 
+    return (valid_word, word_count)
+
+def create_dictionary():
+    conn = None
+    filename = 'words_alpha.txt'
+
+    try:
+        conn = sqlite3.connect(':memory:')
+        print(sqlite3.sqlite_version)
+    except sqlite3.Error as e:
+        print(e)
+    
+    sql_drop_table = """
+        DROP TABLE IF EXISTS words;
+    """
+    sql_create_table = """
+        CREATE TABLE IF NOT EXISTS words ( word TEXT );
+        """
+
+    # create a database connection
+    try:
+        with conn:
+            cursor = conn.cursor()
+            cursor.execute(sql_drop_table)
+            cursor.execute(sql_create_table)
+            conn.commit()
+            print("table 'words' created")
+    except sqlite3.Error as e:
+        print(e)
+
+    print("Adding words to the dictionary")
+    try:    
+        with open(filename) as word_file:
+            for word in word_file.read().split():
+                sql = ''' INSERT INTO words VALUES (?) '''
+                cursor.execute(sql, (word,))
+            conn.commit()  
+    except sqlite3.Error as e:
+        print(e)
+
+    return conn
 
 if __name__ == '__main__':
+    conn = create_dictionary()
     #bfs()
-    dfs()
+    maze = [
+        ['c','m','a','h','t'],
+        ['a','d','r','e','i'],
+        ['a','n','e','h','c'],
+        ['h','b','s','a','t'],
+        ['e','a','d','h','n']
+    ]
+
+    # dfs(conn, maze, 2, 3, 3) # find the word 'tie'
+
+    for y in range(len(maze)):
+        for x in range(len(maze[y])):
+            if maze[y][x] != '':
+                letter = maze[y][x]
+                print("x,y {0},{1} = {2}".format(x,y,letter))
+                dfs(conn, maze, x, y, 8)

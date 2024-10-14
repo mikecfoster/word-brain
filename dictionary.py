@@ -54,7 +54,7 @@ if __name__ == '__main__':
     # english_words = load_words()
     # demo print
     # print('fate' in english_words)
-    db = "dict.db"
+    db = "dictionary.db"
     create_sqlite_database(db)
     create_tables(db)
     load_words(db, 'words_alpha.txt')
