@@ -12,14 +12,12 @@ class Grid:
     def __init__(self, grid):
         self.grid = grid
 
-    def is_walkable(self, x, y, partial_word, conn):
+    def is_walkable(self, x, y):
         if x >= 0 and x < len(self.grid[0]):
             if y >= 0 and y < len(self.grid):
                 if self.grid[y][x] == '':
                     return False
-                word = partial_word + self.grid[y][x]
-                if validate_word(conn,word)[1]>0:
-                    return True
+                return True
         return False
     
     def letter(self, x, y):
@@ -28,25 +26,25 @@ class Grid:
                 return self.grid[y][x]
         return ''
     
-    def adjacent(self, x, y, partial_word, conn):
+    def adjacent(self, x, y):
         """ return a list of adjcent cells as a list of tuples """
         cells = []
         point = namedtuple('point', ['x', 'y'])
-        if self.is_walkable(x+1, y, partial_word, conn):
+        if self.is_walkable(x+1, y):
             cells.append(point(x+1, y))
-        if self.is_walkable(x-1, y, partial_word, conn):
+        if self.is_walkable(x-1, y):
             cells.append(point(x-1, y))
-        if self.is_walkable(x, y+1, partial_word, conn):
+        if self.is_walkable(x, y+1):
             cells.append(point(x, y+1))
-        if self.is_walkable(x, y-1, partial_word, conn):
+        if self.is_walkable(x, y-1):
             cells.append(point(x, y-1))
-        if self.is_walkable(x-1, y-1, partial_word, conn):
+        if self.is_walkable(x-1, y-1):
             cells.append(point(x-1, y-1))
-        if self.is_walkable(x+1, y+1, partial_word, conn):
+        if self.is_walkable(x+1, y+1):
             cells.append(point(x+1, y+1))
-        if self.is_walkable(x+1, y-1, partial_word, conn):
+        if self.is_walkable(x+1, y-1):
             cells.append(point(x+1, y-1))
-        if self.is_walkable(x-1, y+1, partial_word, conn):
+        if self.is_walkable(x-1, y+1):
             cells.append(point(x-1, y+1))
         return cells
     
@@ -87,7 +85,7 @@ class Cell:
         token = cell.cell_as_token()
         while (cell.parent != None):
             cell = cell.parent
-            token = cell.cell_as_token() + token
+            token = cell.cell_as_token() + '-' + token
         return token
     
 class PathList:
@@ -126,7 +124,7 @@ class PathList:
 def dfs(conn, maze, start_x, start_y, target_length):
     grid = Grid(maze)
     frontier = PathList()
-    explored = set()
+    explored_paths = set()
     words = []
     start_point = Cell(start_x,start_y,grid.letter(start_x,start_y))
     frontier.path.append(start_point)
@@ -134,7 +132,7 @@ def dfs(conn, maze, start_x, start_y, target_length):
     while frontier.path:
         cell:Cell = frontier.path.pop() #current node
         path_token = cell.token_from_path()
-        if path_token in explored:
+        if path_token in explored_paths:
             continue
         possible_word = frontier.word_from_node(cell)
         (valid_word , word_count) = validate_word(conn, possible_word)
@@ -142,17 +140,17 @@ def dfs(conn, maze, start_x, start_y, target_length):
             continue
         if  valid_word and len(possible_word) == target_length:
             words.append(possible_word)
-            explored.add(path_token)
-            print('possible word: {0} ({1}) {2}'.format(possible_word, word_count, valid_word))
+            explored_paths.add(path_token)
+            #print('possible word: {0} ({1}) {2} {3}'.format(possible_word, word_count, valid_word, explored_paths))
         if len(possible_word) < target_length:
-            adjacent = grid.adjacent(cell.x, cell.y, possible_word, conn)
+            adjacent = grid.adjacent(cell.x, cell.y)
             if adjacent:
-                explored.add(path_token)
+                explored_paths.add(path_token)
             for point in adjacent:
                 letter = grid.letter(point.x,point.y)
                 next_cell = Cell(point.x, point.y, letter, cell, cell.step+1)
-                path_token = next_cell.token_from_path()
-                if path_token not in explored:
+                cell_token = next_cell.cell_as_token()
+                if cell_token not in path_token:
                     frontier.path.append(next_cell)
 
     print('Words: ')
@@ -227,11 +225,11 @@ if __name__ == '__main__':
     conn = create_dictionary()
     #bfs()
     maze = [
-        ['c','m','a','h','t'],
-        ['a','d','r','e','i'],
-        ['a','n','e','h','c'],
-        ['h','b','s','a','t'],
-        ['e','a','d','h','n']
+        ['g','n','e','',''],
+        ['w','i','r','a',''],
+        ['r','o','s','u',''],
+        ['r','a','d','o',''],
+        ['l','f','i','n','']
     ]
 
     # dfs(conn, maze, 2, 3, 3) # find the word 'tie'
